@@ -484,8 +484,4 @@ async function seedInitialData() {
         console.error('Error seeding data:', error);
     }
 }
-
-// Call seed function after successful MongoDB connection
-/*mongoose.connection.on('connected', () => {
-    seedInitialData();
-});*/
+ 
