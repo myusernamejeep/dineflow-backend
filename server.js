@@ -131,26 +131,7 @@ async function sendEmail(to, subject, htmlBody) {
 
 
 // --- API Endpoints ---
-
-// Serve main application
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/public/index.html');
-});
-
-// Serve admin panel
-app.get('/admin', (req, res) => {
-    res.sendFile(__dirname + '/public/admin.html');
-});
-
-// Serve test page
-app.get('/payment-success', (req, res) => {
-    res.sendFile(__dirname + '/public/payment-success.html');
-});
-// Serve test page
-app.get('/test', (req, res) => {
-    res.sendFile(__dirname + '/test.html');
-});
-
+ 
 // GET /api/restaurants - Get all restaurants
 app.get('/api/restaurants', async (req, res) => {
     try {
