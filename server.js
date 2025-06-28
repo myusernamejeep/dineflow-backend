@@ -22,15 +22,17 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS,
     },
 });
-
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
 // CORS configuration
 const corsOptions = {
     origin: [
         'https://dineflow-frontend.netlify.app',
-        'https://dineflow-frontend.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:5000',
-        'http://localhost:8080'
+        'https://dineflow-frontend.vercel.app', 
+        'http://localhost:5000', 
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
