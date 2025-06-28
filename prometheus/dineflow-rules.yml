@@ -1,0 +1,235 @@
+groups:
+  - name: dineflow_alerts
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes"
+
+      - alert: CriticalCPUUsage
+        expr: cpu_usage_percent > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage is above 90% for more than 2 minutes"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (memory_usage_bytes{type="heap_used"} / memory_usage_bytes{type="heap_total"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 80% for more than 5 minutes"
+
+      - alert: CriticalMemoryUsage
+        expr: (memory_usage_bytes{type="heap_used"} / memory_usage_bytes{type="heap_total"}) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is above 90% for more than 2 minutes"
+
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: (disk_usage_bytes{mount_point="/"} / 1024 / 1024 / 1024) / 100 * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage is above 80% for more than 5 minutes"
+
+      - alert: CriticalDiskUsage
+        expr: (disk_usage_bytes{mount_point="/"} / 1024 / 1024 / 1024) / 100 * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk usage detected"
+          description: "Disk usage is above 90% for more than 2 minutes"
+
+      # Database Connection Issues
+      - alert: HighDatabaseConnections
+        expr: database_connections_active > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connections detected"
+          description: "Database connections are above 80 for more than 5 minutes"
+
+      - alert: CriticalDatabaseConnections
+        expr: database_connections_active > 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical database connections detected"
+          description: "Database connections are above 100 for more than 2 minutes"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 10% for more than 5 minutes"
+
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is above 20% for more than 2 minutes"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is above 2 seconds for more than 5 minutes"
+
+      - alert: CriticalResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical response time detected"
+          description: "95th percentile response time is above 5 seconds for more than 2 minutes"
+
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job="dineflow"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DineFlow service is down"
+          description: "DineFlow service has been down for more than 1 minute"
+
+      # Notification Failures
+      - alert: NotificationFailures
+        expr: rate(notifications_sent_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High notification failure rate"
+          description: "Notification failure rate is above 10% for more than 5 minutes"
+
+      # Booking Failures
+      - alert: BookingFailures
+        expr: rate(bookings_created_total{status="failed"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High booking failure rate"
+          description: "Booking failure rate is above 5% for more than 5 minutes"
+
+      # Low Active Bookings (business metric)
+      - alert: LowActiveBookings
+        expr: active_bookings_total < 10
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low active bookings detected"
+          description: "Active bookings are below 10 for more than 30 minutes"
+
+      # Application Uptime
+      - alert: ApplicationRestart
+        expr: application_uptime_seconds < 300
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Application recently restarted"
+          description: "Application uptime is less than 5 minutes"
+
+  - name: dineflow_business_alerts
+    rules:
+      # Business Critical Alerts
+      - alert: NoBookingsToday
+        expr: sum(rate(bookings_created_total[24h])) == 0
+        for: 2h
+        labels:
+          severity: critical
+        annotations:
+          summary: "No bookings today"
+          description: "No bookings have been created in the last 24 hours"
+
+      - alert: HighCancellationRate
+        expr: sum(rate(bookings_cancelled_total[24h])) / sum(rate(bookings_created_total[24h])) > 0.3
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "High cancellation rate"
+          description: "Cancellation rate is above 30% in the last 24 hours"
+
+      - alert: LowCheckinRate
+        expr: sum(rate(checkins_total[24h])) / sum(rate(bookings_created_total{status="confirmed"}[24h])) < 0.5
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low check-in rate"
+          description: "Check-in rate is below 50% in the last 24 hours"
+
+  - name: dineflow_infrastructure_alerts
+    rules:
+      # Infrastructure Alerts
+      - alert: HighSystemLoad
+        expr: node_load1 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High system load"
+          description: "System load is above 5 for more than 5 minutes"
+
+      - alert: CriticalSystemLoad
+        expr: node_load1 > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical system load"
+          description: "System load is above 10 for more than 2 minutes"
+
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) > 1000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High network traffic"
+          description: "Network receive traffic is above 1MB/s for more than 5 minutes"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Available disk space is below 10% for more than 5 minutes" 

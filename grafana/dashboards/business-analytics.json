@@ -1,0 +1,273 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "DineFlow Business Analytics",
+    "tags": ["dineflow", "business", "analytics"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Daily Revenue",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_created_total{status=\"confirmed\"}[1d])) * 50",
+            "legendFormat": "Estimated Revenue"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Booking Trends by Hour",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_created_total[1h])) by (hour)",
+            "legendFormat": "{{hour}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Restaurant Performance",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(bookings_created_total[24h])) by (restaurant_id))",
+            "legendFormat": "{{restaurant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Cancellation Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_cancelled_total[24h])) / sum(rate(bookings_created_total[24h])) * 100",
+            "legendFormat": "Cancellation Rate (%)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 10 },
+                { "color": "red", "value": 20 }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 }
+      },
+      {
+        "id": 5,
+        "title": "Check-in Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "sum(rate(checkins_total[24h])) / sum(rate(bookings_created_total{status=\"confirmed\"}[24h])) * 100",
+            "legendFormat": "Check-in Rate (%)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 70 },
+                { "color": "green", "value": 90 }
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 }
+      },
+      {
+        "id": 6,
+        "title": "Weekly Booking Pattern",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_created_total[1d])) by (day_of_week)",
+            "legendFormat": "{{day_of_week}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      },
+      {
+        "id": 7,
+        "title": "User Growth",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "users_total",
+            "legendFormat": "Total Users"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+      },
+      {
+        "id": 8,
+        "title": "Notification Success Rate",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum(rate(notifications_sent_total[24h])) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 }
+      },
+      {
+        "id": 9,
+        "title": "Peak Hours Analysis",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_created_total[1h])) by (hour)",
+            "legendFormat": "{{hour}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 }
+      },
+      {
+        "id": 10,
+        "title": "Booking Status Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_created_total[24h])) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 }
+      },
+      {
+        "id": 11,
+        "title": "Revenue by Restaurant",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "sum(rate(bookings_created_total{status=\"confirmed\"}[24h])) by (restaurant_id) * 50",
+            "legendFormat": "{{restaurant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 }
+      }
+    ],
+    "time": {
+      "from": "now-7d",
+      "to": "now"
+    },
+    "refresh": "1m",
+    "schemaVersion": 27,
+    "version": 1,
+    "links": [],
+    "gnetId": null,
+    "graphTooltip": 0,
+    "annotations": {
+      "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "links": [],
+    "liveNow": false,
+    "panels": [],
+    "refresh": "1m",
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-7d",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "DineFlow Business Analytics",
+    "uid": "dineflow-business",
+    "version": 1
+  }
+} 
