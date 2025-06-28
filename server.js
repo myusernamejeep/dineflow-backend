@@ -7,6 +7,10 @@ const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio = require('twilio');
 const nodemailer = require('nodemailer');
+const session = require('express-session');
+const passport = require('passport');
+const LineStrategy = require('passport-line').Strategy;
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,6 +49,21 @@ app.use(express.json()); // Parse JSON request bodies
 app.use(express.static('public')); // Serve static files from public directory
 // Additional CORS headers for preflight requests
 //app.options('*', cors(corsOptions));
+ 
+// Serve main application
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/public/index.html');
+});
+
+// Serve admin panel
+app.get('/admin', (req, res) => {
+    res.sendFile(__dirname + '/public/admin.html');
+});
+
+// Serve test page
+app.get('/payment-success', (req, res) => {
+    res.sendFile(__dirname + '/public/payment-success.html');
+}); 
 
 // --- MongoDB Connection ---
 mongoose.connect(process.env.MONGO_URI)
@@ -53,20 +72,18 @@ mongoose.connect(process.env.MONGO_URI)
         seedInitialData();
     })
     .catch(err => console.error('MongoDB connection error:', err));
-
-/*
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/dineflow', { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(async () => {
-        await mongoose.connection.db.collection('restaurants').deleteMany({});
-        console.log('All restaurants deleted.');
-        process.exit(0);
-    })
-    .catch(err => {
-        console.error('Error connecting to MongoDB:', err);
-        process.exit(1);
-    });
-*/ 
+ 
 // --- MongoDB Schemas & Models ---
+
+// User Schema
+const userSchema = new mongoose.Schema({
+    lineUserId: { type: String, required: true, unique: true },
+    displayName: String,
+    email: String,
+    pictureUrl: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const User = mongoose.model('User', userSchema);
 
 // Restaurant Schema
 const restaurantSchema = new mongoose.Schema({
@@ -92,7 +109,8 @@ const Restaurant = mongoose.model('Restaurant', restaurantSchema);
 // Booking Schema
 const bookingSchema = new mongoose.Schema({
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
-    customerName: { type: String, required: true }, // For simplicity, in real app, link to Customer ID
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // reference to User
+    customerName: { type: String, required: true },
     customerEmail: { type: String, required: true },
     customerPhone: { type: String, required: true },
     bookingDate: { type: String, required: true }, // YYYY-MM-DD
@@ -101,9 +119,14 @@ const bookingSchema = new mongoose.Schema({
     tableId: { type: String, required: true }, // The specific table booked
     depositAmount: { type: Number, required: true },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
-    bookingStatus: { type: String, enum: ['pending', 'confirmed', 'cancelled', 'no-show'], default: 'pending' },
+    bookingStatus: { type: String, enum: ['pending', 'confirmed', 'cancelled', 'no-show', 'checked-in'], default: 'pending' },
     stripePaymentIntentId: String,
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    qrCheckedIn: { type: Boolean, default: false },
+    cancelledAt: Date,
+    checkedInAt: Date,
+    specialRequests: { type: String, default: '' },
+    dietaryRestrictions: { type: String, default: '' }
 });
 const Booking = mongoose.model('Booking', bookingSchema);
 
@@ -147,6 +170,27 @@ async function sendEmail(to, subject, htmlBody) {
     }
 }
 
+// Function to send LINE Messaging API
+async function sendLineMessage(userId, message) {
+    const channelAccessToken = process.env.LINE_MESSAGING_ACCESS_TOKEN;
+    if (!channelAccessToken || !userId) return;
+    try {
+        await fetch('https://api.line.me/v2/bot/message/push', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${channelAccessToken}`
+            },
+            body: JSON.stringify({
+                to: userId,
+                messages: [{ type: 'text', text: message }]
+            })
+        });
+        console.log('LINE Messaging API: message sent');
+    } catch (e) {
+        console.error('Error sending LINE message:', e);
+    }
+}
 
 // --- API Endpoints ---
  
@@ -207,21 +251,30 @@ app.get('/api/restaurants/:id/tables/available', async (req, res) => {
     }
 });
 
+// GET /api/me - Get current user info
+app.get('/api/me', ensureAuthenticated, (req, res) => {
+    if (!req.user) return res.status(401).json({ message: 'Not logged in' });
+    res.json({
+        _id: req.user._id,
+        lineUserId: req.user.lineUserId,
+        displayName: req.user.displayName,
+        email: req.user.email,
+        pictureUrl: req.user.pictureUrl
+    });
+});
+
 // POST /api/bookings - Create a new booking (initial step, payment status pending)
 app.post('/api/bookings', async (req, res) => {
     try {
-        const { restaurantId, customerName, customerEmail, customerPhone, bookingDate, bookingTime, numGuests, tableId } = req.body;
-
+        const { restaurantId, customerName, customerEmail, customerPhone, bookingDate, bookingTime, numGuests, tableId, specialRequests, dietaryRestrictions } = req.body;
         // Basic validation
         if (!restaurantId || !customerName || !customerEmail || !customerPhone || !bookingDate || !bookingTime || !numGuests || !tableId) {
             return res.status(400).json({ message: 'Missing required booking details.' });
         }
-
         const restaurant = await Restaurant.findById(restaurantId);
         if (!restaurant) {
             return res.status(404).json({ message: 'Restaurant not found.' });
         }
-
         const selectedTable = restaurant.tables.find(t => t.tableId === tableId);
         if (!selectedTable) {
             return res.status(400).json({ message: 'Selected table not found for this restaurant.' });
@@ -229,7 +282,6 @@ app.post('/api/bookings', async (req, res) => {
         if (selectedTable.capacity < numGuests) {
             return res.status(400).json({ message: 'Selected table capacity is too small for the number of guests.' });
         }
-
         // Re-check availability just before creating booking to prevent double-booking
         const existingBookingForTable = await Booking.findOne({
             restaurantId: restaurantId,
@@ -238,15 +290,13 @@ app.post('/api/bookings', async (req, res) => {
             bookingTime: bookingTime,
             $or: [{ bookingStatus: 'pending' }, { bookingStatus: 'confirmed' }]
         });
-
         if (existingBookingForTable) {
             return res.status(409).json({ message: 'Selected table is no longer available at this time. Please choose another.' });
         }
-
         const depositAmount = restaurant.depositPerPerson * numGuests;
-
         const newBooking = new Booking({
             restaurantId,
+            user: req.user._id,
             customerName,
             customerEmail,
             customerPhone,
@@ -256,11 +306,15 @@ app.post('/api/bookings', async (req, res) => {
             tableId,
             depositAmount,
             paymentStatus: 'pending',
-            bookingStatus: 'pending' // Initial status
+            bookingStatus: 'pending', // Initial status
+            stripePaymentIntentId: null,
+            qrCheckedIn: false,
+            cancelledAt: null,
+            checkedInAt: null,
+            specialRequests: specialRequests || '',
+            dietaryRestrictions: dietaryRestrictions || ''
         });
-
         await newBooking.save();
-
         res.status(201).json({
             message: 'Booking created successfully, awaiting payment.',
             bookingId: newBooking._id,
@@ -268,7 +322,6 @@ app.post('/api/bookings', async (req, res) => {
             restaurantName: restaurant.name,
             tableDetails: selectedTable
         });
-
     } catch (error) {
         console.error('Error creating booking:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -370,6 +423,67 @@ app.post('/api/payments/process', async (req, res) => {
     }
 });
 
+// GET /api/bookings/history
+app.get('/api/bookings/history', ensureAuthenticated, async (req, res) => {
+  const userId = req.user.id || req.user.userId; // LINE userId
+  const bookings = await Booking.find({ user: userId });
+  res.json(bookings);
+});
+
+// POST /api/bookings/:id/cancel
+app.post('/api/bookings/:id/cancel', ensureAuthenticated, async (req, res) => {
+    const booking = await Booking.findById(req.params.id).populate('user');
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (booking.user._id.toString() !== req.user._id.toString())
+        return res.status(403).json({ message: 'Forbidden' });
+
+    const now = new Date();
+    const bookingDate = new Date(`${booking.bookingDate}T${booking.bookingTime}`);
+    const diffHours = (bookingDate - now) / (1000 * 60 * 60);
+
+    let refundAmount = booking.depositAmount;
+    if (diffHours < 24) {
+        refundAmount = Math.floor(booking.depositAmount * (diffHours / 24)); // คืนตามสัดส่วน
+    }
+
+    // Refund via Stripe
+    if (booking.stripePaymentIntentId) {
+        const refund = await stripe.refunds.create({
+            payment_intent: booking.stripePaymentIntentId,
+            amount: Math.round(refundAmount * 100), // satang
+        });
+    }
+
+    booking.bookingStatus = 'cancelled';
+    booking.paymentStatus = 'refunded';
+    booking.cancelledAt = now;
+    await booking.save();
+
+    // แจ้งเตือน email/LINE Messaging API
+    const notifyMsg = `การจองของคุณถูกยกเลิกและคืนเงิน ${refundAmount} บาท\nร้าน: ${booking.restaurantName || ''}\nวันที่: ${booking.bookingDate} เวลา: ${booking.bookingTime}`;
+    sendEmail(booking.customerEmail, 'ยกเลิกการจอง DineFlow', `<p>${notifyMsg}</p>`);
+    sendLineMessage(booking.user.lineUserId, notifyMsg);
+
+    res.json({ message: 'Booking cancelled and refunded', refundAmount });
+});
+
+// POST /api/bookings/:id/checkin
+app.post('/api/bookings/:id/checkin', async (req, res) => {
+    const booking = await Booking.findById(req.params.id).populate('user');
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (booking.bookingStatus === 'checked-in')
+        return res.status(400).json({ message: 'Already checked in' });
+
+    booking.bookingStatus = 'checked-in';
+    booking.checkedInAt = new Date();
+    await booking.save();
+    // แจ้งเตือนทั้ง admin และผู้จอง
+    const notifyMsg = `เช็คอินสำเร็จ!\nร้าน: ${booking.restaurantName || ''}\nวันที่: ${booking.bookingDate} เวลา: ${booking.bookingTime}`;
+    sendEmail(booking.customerEmail, 'เช็คอินสำเร็จ DineFlow', `<p>${notifyMsg}</p>`);
+    sendLineMessage(booking.user.lineUserId, notifyMsg);
+    res.json({ message: 'Checked in successfully' });
+});
+
 // --- Admin Panel API (for CRUD operations on restaurants and viewing bookings) ---
 
 // POST /api/admin/restaurants - Add a new restaurant (Admin only)
@@ -422,6 +536,114 @@ app.put('/api/admin/bookings/:id/status', async (req, res) => {
         console.error('Error updating booking status:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
+});
+
+// GET /api/admin/analytics - Advanced analytics dashboard data
+app.get('/api/admin/analytics', async (req, res) => {
+    try {
+        const [totalBookings, totalDeposit, totalCheckin, totalCancelled, bookings, restaurants] = await Promise.all([
+            Booking.countDocuments({}),
+            Booking.aggregate([{ $group: { _id: null, sum: { $sum: "$depositAmount" } } }]),
+            Booking.countDocuments({ bookingStatus: 'checked-in' }),
+            Booking.countDocuments({ bookingStatus: 'cancelled' }),
+            Booking.find({}),
+            Restaurant.find({})
+        ]);
+        // กราฟจำนวนจองรายวัน 14 วันล่าสุด
+        const days = 14;
+        const today = new Date();
+        const chartLabels = [];
+        const chartData = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(today.getDate() - i);
+            const label = d.toISOString().slice(0, 10);
+            chartLabels.push(label);
+            const count = bookings.filter(b => b.createdAt.toISOString().slice(0, 10) === label).length;
+            chartData.push(count);
+        }
+        // สถิติ per ร้าน
+        const statsByRestaurant = {};
+        restaurants.forEach(r => {
+            statsByRestaurant[r._id] = {
+                name: r.name,
+                total: 0,
+                deposit: 0,
+                checkin: 0,
+                cancel: 0
+            };
+        });
+        bookings.forEach(b => {
+            const r = statsByRestaurant[b.restaurantId?.toString()];
+            if (r) {
+                r.total++;
+                r.deposit += b.depositAmount;
+                if (b.bookingStatus === 'checked-in') r.checkin++;
+                if (b.bookingStatus === 'cancelled') r.cancel++;
+            }
+        });
+        // Top 3 ร้านที่มีการจองมากที่สุด
+        const topRestaurants = Object.values(statsByRestaurant)
+            .sort((a, b) => b.total - a.total).slice(0, 3);
+        // Top 3 รายได้มัดจำรวมต่อร้าน
+        const topRevenue = Object.values(statsByRestaurant)
+            .sort((a, b) => b.deposit - a.deposit).slice(0, 3);
+        // Top 3 อัตราการเช็คอินต่อร้าน
+        const topCheckinRate = Object.values(statsByRestaurant)
+            .filter(r => r.total > 0)
+            .map(r => ({ name: r.name, rate: (r.checkin / r.total * 100).toFixed(1), total: r.total }))
+            .sort((a, b) => b.rate - a.rate).slice(0, 3);
+        // Top 3 อัตราการยกเลิกต่อร้าน
+        const topCancelRate = Object.values(statsByRestaurant)
+            .filter(r => r.total > 0)
+            .map(r => ({ name: r.name, rate: (r.cancel / r.total * 100).toFixed(1), total: r.total }))
+            .sort((a, b) => b.rate - a.rate).slice(0, 3);
+        res.json({
+            totalBookings,
+            totalDeposit: totalDeposit[0] ? totalDeposit[0].sum : 0,
+            totalCheckin,
+            totalCancelled,
+            chart: { labels: chartLabels, data: chartData },
+            topRestaurants,
+            topRevenue,
+            topCheckinRate,
+            topCancelRate
+        });
+    } catch (e) {
+        res.status(500).json({ message: 'Error loading analytics' });
+    }
+});
+
+// LINE Notify OAuth2 Callback
+app.get('/line-notify-callback', ensureAuthenticated, async (req, res) => {
+    const code = req.query.code;
+    if (!code) return res.status(400).send('Missing code');
+    try {
+        // ขอ access token จาก LINE Notify
+        const tokenRes = await fetch('https://notify-bot.line.me/oauth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: `${req.protocol}://${req.get('host')}/line-notify-callback`,
+                client_id: process.env.LINE_NOTIFY_CLIENT_ID,
+                client_secret: process.env.LINE_NOTIFY_CLIENT_SECRET
+            })
+        });
+        const tokenData = await tokenRes.json();
+        if (!tokenData.access_token) return res.status(400).send('Failed to get LINE Notify token');
+        // บันทึก token ใน user
+        await User.findByIdAndUpdate(req.user._id, { lineNotifyToken: tokenData.access_token });
+        res.send('<script>alert("เชื่อม LINE Notify สำเร็จ!");window.location="/";</script>');
+    } catch (e) {
+        res.status(500).send('LINE Notify error');
+    }
+});
+
+// GET /api/config/line-oa-id - Return LINE OA ID from env
+app.get('/api/config/line-oa-id', (req, res) => {
+    res.json({ lineOAId: process.env.LINE_OA_ID || '' });
 });
 
 // This is for Vercel deployment: wrap the Express app in a serverless function
@@ -482,5 +704,40 @@ async function seedInitialData() {
     } catch (error) {
         console.error('Error seeding data:', error);
     }
+}
+
+// Session middleware
+app.use(session({ secret: 'dineflow-secret', resave: false, saveUninitialized: true }));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// User serialization
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((obj, done) => done(null, obj));
+
+// LINE Strategy
+passport.use(new LineStrategy({
+  channelID: process.env.LINE_CHANNEL_ID,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
+  callbackURL: process.env.LINE_CALLBACK_URL,
+  scope: ['profile', 'openid', 'email']
+}, (accessToken, refreshToken, params, profile, done) => {
+  // Save/update user in DB here if needed
+  return done(null, profile);
+}));
+
+// Auth routes
+app.get('/auth/line', passport.authenticate('line'));
+app.get('/auth/line/callback', passport.authenticate('line', { failureRedirect: '/' }),
+  (req, res) => {
+    // Save user info to session or JWT
+    res.redirect('/'); // or /history
+  }
+);
+
+// Middleware to protect routes
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) return next();
+  res.status(401).json({ message: 'Unauthorized' });
 }
  
