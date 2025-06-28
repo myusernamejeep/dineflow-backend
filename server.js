@@ -42,7 +42,7 @@ app.use(cors(corsOptions)); // Enable CORS with specific configuration
 app.use(express.json()); // Parse JSON request bodies
 app.use(express.static('public')); // Serve static files from public directory
 // Additional CORS headers for preflight requests
-app.options('*', cors(corsOptions));
+//app.options('*', cors(corsOptions));
 
 // --- MongoDB Connection ---
 mongoose.connect(process.env.MONGO_URI)
