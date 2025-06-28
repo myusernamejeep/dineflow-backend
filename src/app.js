@@ -9,6 +9,8 @@ const bookingRoutes = require('./routes/booking');
 const restaurantRoutes = require('./routes/restaurant');
 const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/user');
+const reviewRoutes = require('./routes/reviews');
+const reviewAnalyticsRoutes = require('./routes/reviewAnalytics');
 
 const app = new Koa();
 
@@ -39,7 +41,9 @@ app.use(async (ctx, next) => {
   const publicRoutes = [
     '/api/restaurants',
     '/api/auth/line',
-    '/api/line-oa-id'
+    '/api/line-oa-id',
+    '/api/reviews/restaurant',
+    '/api/reviews/stats'
   ];
   
   const isPublicRoute = publicRoutes.some(route => 
@@ -58,6 +62,8 @@ app.use(bookingRoutes.routes());
 app.use(restaurantRoutes.routes());
 app.use(adminRoutes.routes());
 app.use(userRoutes.routes());
+app.use(reviewRoutes.routes());
+app.use(reviewAnalyticsRoutes.routes());
 
 // Health check endpoint
 app.use(async (ctx) => {
@@ -67,7 +73,7 @@ app.use(async (ctx) => {
 });
 
 // Connect to MongoDB and start server
-mongoose.connect(process.env.MONGO_URI, { 
+mongoose.connect(process.env.MONGODB_URI, { 
   useNewUrlParser: true, 
   useUnifiedTopology: true 
 })
@@ -75,7 +81,8 @@ mongoose.connect(process.env.MONGO_URI, {
   const port = process.env.PORT || 5000;
   app.listen(port, () => {
     console.log(`🚀 Koa server running on port ${port}`);
-    console.log(`📊 MongoDB connected: ${process.env.MONGO_URI}`);
+    console.log(`📊 MongoDB connected: ${process.env.MONGODB_URI}`);
+    console.log(`⭐ Review system enabled`);
   });
 })
 .catch(err => {

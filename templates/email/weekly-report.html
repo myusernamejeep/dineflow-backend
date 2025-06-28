@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Weekly Report - {{period.start}} to {{period.end}}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .summary { margin: 20px 0; }
+        .trend { display: inline-block; margin: 10px; padding: 15px; background-color: #e9ecef; border-radius: 8px; }
+        .trend-positive { border-left: 4px solid #28a745; }
+        .trend-negative { border-left: 4px solid #dc3545; }
+        .recommendation { margin: 15px 0; padding: 15px; background-color: #fff3cd; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Weekly Report</h1>
+        <p>Period: {{period.start}} to {{period.end}}</p>
+        <p>Generated on {{generatedAt}}</p>
+    </div>
+    
+    <h2>Summary</h2>
+    <div class="summary">
+        <div class="trend">
+            <strong>Total Revenue:</strong> ${{totalRevenue}}<br>
+            <small>Growth: {{growthRate}}%</small>
+        </div>
+        <div class="trend">
+            <strong>Total Bookings:</strong> {{totalBookings}}<br>
+            <small>Conversion: {{conversionRate}}%</small>
+        </div>
+        <div class="trend">
+            <strong>New Users:</strong> {{newUsers}}<br>
+            <small>Avg Daily: {{avgDailyUsers}}</small>
+        </div>
+    </div>
+    
+    {{#if recommendations}}
+    <h2>Recommendations</h2>
+    {{#each recommendations}}
+    <div class="recommendation">
+        <strong>{{title}}:</strong> {{description}}
+        {{#if actions}}
+        <ul>
+            {{#each actions}}
+            <li>{{this}}</li>
+            {{/each}}
+        </ul>
+        {{/if}}
+    </div>
+    {{/each}}
+    {{/if}}
+    
+    <p>Best regards,<br>DineFlow Analytics Team</p>
+</body>
+</html>

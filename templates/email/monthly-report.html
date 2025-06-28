@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Monthly Report - {{period.year}}-{{period.month}}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .kpi { display: inline-block; margin: 10px; padding: 20px; background-color: #e9ecef; border-radius: 8px; min-width: 200px; text-align: center; }
+        .kpi-value { font-size: 32px; font-weight: bold; color: #007bff; }
+        .kpi-label { font-size: 16px; color: #6c757d; margin-top: 10px; }
+        .forecast { margin: 20px 0; padding: 20px; background-color: #d1ecf1; border-radius: 8px; }
+        .insight { margin: 15px 0; padding: 15px; border-left: 4px solid #007bff; background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Monthly Report</h1>
+        <p>Period: {{period.year}}-{{period.month}}</p>
+        <p>Generated on {{generatedAt}}</p>
+    </div>
+    
+    <h2>Key Performance Indicators</h2>
+    <div class="kpis">
+        <div class="kpi">
+            <div class="kpi-value">${{totalRevenue}}</div>
+            <div class="kpi-label">Total Revenue</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{totalBookings}}</div>
+            <div class="kpi-label">Total Bookings</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{conversionRate}}%</div>
+            <div class="kpi-label">Conversion Rate</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{avgRevenuePerRestaurant}}</div>
+            <div class="kpi-label">Avg Revenue/Restaurant</div>
+        </div>
+    </div>
+    
+    {{#if forecasts}}
+    <h2>Forecasts</h2>
+    <div class="forecast">
+        <h3>Next Month Predictions</h3>
+        <p><strong>Revenue:</strong> ${{forecasts.revenue.nextMonth}} ({{forecasts.confidence.revenue}}% confidence)</p>
+        <p><strong>Bookings:</strong> {{forecasts.bookings.nextMonth}} ({{forecasts.confidence.bookings}}% confidence)</p>
+    </div>
+    {{/if}}
+    
+    {{#if insights}}
+    <h2>Insights</h2>
+    {{#each insights}}
+    <div class="insight">
+        <strong>{{title}}:</strong> {{description}}
+    </div>
+    {{/each}}
+    {{/if}}
+    
+    <p>Best regards,<br>DineFlow Analytics Team</p>
+</body>
+</html>
