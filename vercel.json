@@ -10,23 +10,7 @@
     {
       "src": "/api/(.*)",
       "dest": "/server.js"
-    },
-    {
-      "src": "/test",
-      "dest": "/test.html"
-    },
-    {
-      "src": "/payment-success",
-      "dest": "/public/payment-success.html"
-    },
-    {
-      "src": "/admin",
-      "dest": "/public/admin.html"
-    },
-    {
-      "src": "/",
-      "dest": "/public/index.html"
-    },
+    },  
     {
       "src": "/(.*)",
       "dest": "/public/$1"

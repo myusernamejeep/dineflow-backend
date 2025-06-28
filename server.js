@@ -425,11 +425,19 @@ app.put('/api/admin/bookings/:id/status', async (req, res) => {
     }
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`To run the frontend prototype, ensure it targets http://localhost:${PORT}`);
-});
+// This is for Vercel deployment: wrap the Express app in a serverless function
+// Vercel expects a file named `api/index.js` (or similar) that exports the app.
+// For local development, `app.listen` is used. For Vercel, it uses the exported `app`.
+if (process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'development') {
+    // If running on Vercel, export the app directly
+    module.exports = app;
+} else {
+    // For local development, start the server normally
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+        console.log(`To run the frontend prototype, ensure it targets http://localhost:${PORT}`);
+    });
+}
 
 // --- Initial Data Seeding (Optional - for quick testing) ---
 // Run this once to populate some initial data in MongoDB
